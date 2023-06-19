@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<doc>
+  <entete>
+    <type>DN</type>
+    <version>VERSION_2_0</version>
+    <emetteur>ATP</emetteur>
+    <dateGeneration>2022-10-13T12:00:00</dateGeneration>
+    <logiciel>
+      <editeur>MONEDITEUR</editeur>
+      <nom>MONPROGICIEL</nom>
+      <version>11.0.0 Patch 3</version>
+      <dateVersion>2022-12-25</dateVersion>
+    </logiciel>
+  </entete>
+  <corps>
+    <periode>
+      <type>TRIMESTRIEL</type>
+      <annee>2023</annee>
+      <numero>1</numero>
+    </periode>
+    <attributs>
+      <complementaire>false</complementaire>
+      <contratAlternance>false</contratAlternance>
+      <pasAssureRemunere>false</pasAssureRemunere>
+      <pasDeReembauche>false</pasDeReembauche>
+    </attributs>
+    <employeur>
+      <numero>123456</numero>
+      <suffixe>1</suffixe>
+      <nom>TENNIS CONSULTING</nom>
+      <rid>12345</rid>
+      <codeCotisation>001</codeCotisation>
+      <tauxATPrincipal>0.72</tauxATPrincipal>
+    </employeur>
+    <assures>
+      <assure>
+        <numero>458784</numero>
+        <nom>LENDL</nom>
+        <prenoms>IVAN DIMITRI</prenoms>
+        <dateNaissance>1960-03-07</dateNaissance>
+        <codeAT>PRINCIPAL</codeAT>
+        <etablissementRID>123</etablissementRID>
+        <codeCommune>09</codeCommune>
+        <nombreHeures>156.00</nombreHeures>
+        <remuneration>500000</remuneration>
+        <assiettes>
+          <assiette>
+            <type>RUAMM</type>
+            <valeur>500000</valeur>
+          </assiette>
+          <assiette>
+            <type>FIAF</type>
+            <valeur>500000</valeur>
+          </assiette>
+        </assiettes>
+        <dateRupture>2023-01-31</dateRupture>
+        <observations>FIN DE CONTRAT</observations>
+      </assure>
+    </assures>
+    <decompte>
+      <cotisations>
+        <cotisation>
+          <type>RUAMM</type>
+          <tranche>TRANCHE_1</tranche>
+          <assiette>3583400</assiette>
+          <valeur>556144</valeur>
+        </cotisation>
+      </cotisations>
+      <totalCotisations>1803203</totalCotisations>
+      <deductions>
+        <deduction>
+          <type>ACOMPTE</type>
+          <valeur>3203</valeur>
+        </deduction>
+        <deduction>
+          <type>RBS</type>
+          <valeur>100000</valeur>
+        </deduction>
+      </deductions>
+      <montantAPayer>1700000</montantAPayer>
+    </decompte>
+  </corps>
+</doc>
