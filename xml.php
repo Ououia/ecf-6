@@ -40,61 +40,41 @@ if (isset($_GET['month']) || isset($_GET['quarter']) || isset($_GET['year'])) {
     $quarter = $_GET['quarter'] ?? "";
     $year = $_GET['year'];
     $type =  $_GET["contact"];
+    $periods = [];
 
     if (isset($year)) {
-        // $dateEmbauche = $year;
+        $yearOnly = $year;
+        $periods = [$year . "01", $year . "02", $year . "03", $year . "04", $year . "05", $year . "06", $year . "07", $year . "08", $year . "09", $year . "10", $year . "11", $year . "12"];
         if ($quarter != "") {
             switch ($quarter) {
                 case 1:
-                    $firstMonth = "01";
-                    $lastMonth = "03";
+                    $periods = [$year . "01", $year . "02", $year . "03"];
+
                     break;
                 case 2:
-                    $firstMonth = "04";
-                    $lastMonth = "06";
+                    $periods = [$year . "04", $year . "05", $year . "06"];
                     break;
                 case 3:
-                    $firstMonth = "07";
-                    $lastMonth = "09";
+                    $periods = [$year . "07", $year . "08", $year . "09"];
+
                     break;
                 case 4:
-                    $firstMonth = "10";
-                    $lastMonth = "12";
+                    $periods = [$year . "10", $year . "11", $year . "12"];
                     break;
                 default:
                     break;
             }
-            $employees = "SELECT * FROM `salaries` WHERE YEAR(dembauche) = 2022 AND MONTH(dembauche) BETWEEN $firstMonth AND $lastMonth";
-
-            $employees = $pdo->query($employees);
-            $employees = $employees->fetchAll();
         }
 
         if ($month != "") {
+            $periods = [$year . $month];
             $yearOnly = $year;
             $year = $year . $month;
-            $stmt = $pdo->prepare("SELECT 
-            salaries.id AS salarie_id, salaries.nom, salaries.prenom,salaries.numcafat,salaries.dnaissance,salaries.dembauche,
-            SUM(bulletin.brut) AS total_brut,
-            SUM(bulletin.nombre_heures) AS total_hours
-            FROM 
-                bulletin
-            INNER JOIN 
-                salaries ON bulletin.salarie_id = salaries.id
-            WHERE 
-                bulletin.periode LIKE :year
-            GROUP BY 
-            salaries.id, salaries.nom, salaries.prenom");
-
-            // Bind the year variable to the SQL statement
-            $stmt->execute(['year' => $year . '%']);
-
-            // Fetch all rows and print them
-            $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
         // Prepare the SQL statement
+        $in = "'" . implode("','", $periods) . "'"; // assumes data is safe!
         $stmt = $pdo->prepare("SELECT 
-        salaries.id AS salarie_id, salaries.nom, salaries.prenom,salaries.numcafat,salaries.dnaissance,salaries.dembauche,
+        salaries.id AS salarie_id, salaries.nom, salaries.prenom,salaries.numcafat,salaries.dnaissance,salaries.dembauche,salaries.drupture,
         SUM(bulletin.brut) AS total_brut,
         SUM(bulletin.nombre_heures) AS total_hours
         FROM 
@@ -102,24 +82,25 @@ if (isset($_GET['month']) || isset($_GET['quarter']) || isset($_GET['year'])) {
         INNER JOIN 
             salaries ON bulletin.salarie_id = salaries.id
         WHERE 
-            bulletin.periode LIKE :year
+            bulletin.periode IN ($in) 
         GROUP BY 
         salaries.id, salaries.nom, salaries.prenom");
 
         // Bind the year variable to the SQL statement
-        $stmt->execute(['year' => $year . '%']);
+        $stmt->execute();
 
         // Fetch all rows and print them
         $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-
-    // print_r($employees);
-
+    $list_employee_id = [];
+    foreach ($employees as $employee) {
+        array_push($list_employee_id, $employee['salarie_id']);
+    }
 
     //Create XML
     $doc = new DOMDocument('1.0', 'ISO-8859-1');
-    $doc->formatOutput = true;
+    // $doc->formatOutput = true;
 
     // doc
     $docElement = $doc->createElement('doc');
@@ -186,6 +167,8 @@ if (isset($_GET['month']) || isset($_GET['quarter']) || isset($_GET['year'])) {
     $corps->appendChild($assures);
 
     foreach ($employees as $employee) {
+        // print_r($employee);
+
         $assure = $doc->createElement('assure');
         $assures->appendChild($assure);
 
@@ -195,90 +178,258 @@ if (isset($_GET['month']) || isset($_GET['quarter']) || isset($_GET['year'])) {
         $assure->appendChild($doc->createElement('dateNaissance', $employee['dnaissance']));
         $assure->appendChild($doc->createElement('codeAT', 'PRINCIPAL'));
         $assure->appendChild($doc->createElement('etablissementRID', $societeNumeroRidet['1']));
-        if (isset($year)) {
-            $yearEmbauche = date("Y", strtotime($employee['dembauche']));
-            if ($yearEmbauche == $year) {
+        foreach ($periods as $period) {
+            $yearEmbauche = date("Ym", strtotime($employee['dembauche']));
+            if ($yearEmbauche == $period) {
                 $assure->appendChild($doc->createElement('dateEmbauche', $employee['dembauche']));
             }
-            if ($quarter != "") {
-                $yearEmbauche = date("Y-m", strtotime($employee['dembauche']));
-                if ($yearEmbauche == $year . "-" . "0" . $quarter) {
-                    $assure->appendChild($doc->createElement('dateEmbauche', $employee['dembauche']));
-                }
-            }
-            if ($month != "") {
-                $yearEmbauche = date("Ym", strtotime($employee['dembauche']));
-                if ($yearEmbauche == $year . $quarter) {
-                    $assure->appendChild($doc->createElement('dateEmbauche', $employee['dembauche']));
-                }
-            }
         }
-        // $assure->appendChild($doc->createElement('codeCommune', $employee['']'09'));0
+
         $assure->appendChild($doc->createElement('nombreHeures', $employee['total_hours']));
         $assure->appendChild($doc->createElement('remuneration', $employee['total_brut']));
+
+        // assiettes
+        $assiettes = $doc->createElement('assiettes');
+        $assure->appendChild($assiettes);
+        $in = "'" . implode("','", $periods) . "'"; // assumes data is safe!
+
+        // $ligne_bulletins_query =  $pdo->prepare("SELECT * 
+        // FROM `bulletin` 
+        // JOIN ligne_bulletin on ligne_bulletin.bulletin_id = bulletin.id 
+        // WHERE periode IN ($in) 
+        // AND bulletin.salarie_id = :salarie_id 
+        // AND ligne_bulletin.rubrique_id IN (58,57,67,56,59,60,61,62,68,64,65,66)
+        // ORDER BY ligne_bulletin.rubrique_id");
+
+        // $ligne_bulletins_query->execute(["salarie_id" => $employee["salarie_id"]]);
+        // $ligne_bulletins = $ligne_bulletins_query->fetchAll();
+
+        $testligne_query = $pdo->prepare("SELECT rubrique_id, sum(base) as base , sum(montant_salarial) as montant_salarial, sum(montant_patronal)  as montant_patronal
+        FROM `bulletin`
+        JOIN ligne_bulletin on ligne_bulletin.bulletin_id = bulletin.id
+        WHERE periode IN ($in)
+        AND bulletin.salarie_id = :salarie_id  
+        AND ligne_bulletin.rubrique_id IN (58,57,67,56,59,60,61,62,68,64,65,66)
+        GROUP BY ligne_bulletin.rubrique_id");
+
+        $testligne_query->execute(["salarie_id" => $employee["salarie_id"]]);
+        $testligne = $testligne_query->fetchAll();
+
+
+
+        foreach ($testligne as $ligne) {
+            if ($ligne["rubrique_id"] == 57 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'RUAMM'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+
+            if ($ligne["rubrique_id"] == 58 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'RUAMM'));
+                $assiette->appendChild($doc->createElement('tranche', 'TRANCHE_2'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+
+            if ($ligne["rubrique_id"] == 67 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'FIAF'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 56 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'PRESTATIONS_FAMILIALES'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 56 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'CHOMAGE'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 62 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'ATMP'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 68 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'FDS'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 64 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'FORMATION_PROFESSIONNELLE'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 65 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'FSH'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+            if ($ligne["rubrique_id"] == 66 && $ligne["base"] != 0) {
+                $assiette = $doc->createElement('assiette');
+                $assiettes->appendChild($assiette);
+                $assiette->appendChild($doc->createElement('type', 'CCS'));
+                $assiette->appendChild($doc->createElement('valeur', $ligne["base"]));
+            }
+        }
+        foreach ($periods as $period) {
+            $dateRupture = date("Ym", strtotime($employee['drupture']));
+            if ($dateRupture == $period) {
+                $assure->appendChild($doc->createElement('dateRupture', $employee['drupture']));
+            }
+        }
     }
 
-
-    // assiettes
-    $assiettes = $doc->createElement('assiettes');
-    $assure->appendChild($assiettes);
-
-    $assiette1 = $doc->createElement('assiette');
-    $assiettes->appendChild($assiette1);
-
-    $assiette1->appendChild($doc->createElement('type', 'RUAMM'));
-    $assiette1->appendChild($doc->createElement('valeur', '500000'));
-
-    $assiette2 = $doc->createElement('assiette');
-    $assiettes->appendChild($assiette2);
-
-    $assiette2->appendChild($doc->createElement('type', 'FIAF'));
-    $assiette2->appendChild($doc->createElement('valeur', '500000'));
-
-    $assure->appendChild($doc->createElement('dateRupture', '2023-01-31'));
-    $assure->appendChild($doc->createElement('observations', 'FIN DE CONTRAT'));
 
     // decompte
     $decompte = $doc->createElement('decompte');
     $corps->appendChild($decompte);
 
-    // cotisations
     $cotisations = $doc->createElement('cotisations');
     $decompte->appendChild($cotisations);
 
-    $cotisation = $doc->createElement('cotisation');
-    $cotisations->appendChild($cotisation);
+    $test = "'" . implode("','", $list_employee_id) . "'";
 
-    $cotisation->appendChild($doc->createElement('type', 'RUAMM'));
-    $cotisation->appendChild($doc->createElement('tranche', 'TRANCHE_1'));
-    $cotisation->appendChild($doc->createElement('assiette', '3583400'));
-    $cotisation->appendChild($doc->createElement('valeur', '556144'));
+    $decompte_query = $pdo->prepare("SELECT rubrique_id, sum(base) as base , sum(montant_salarial) as montant_salarial, sum(montant_patronal)  as montant_patronal ,   sum(montant_salarial) + sum(montant_patronal) as sum
+    FROM `bulletin`
+    JOIN ligne_bulletin on ligne_bulletin.bulletin_id = bulletin.id
+    WHERE periode IN ($in)
+    AND bulletin.salarie_id IN ($test)  
+    AND ligne_bulletin.rubrique_id IN (58,57,67,56,59,60,61,62,68,64,65,66)
+    GROUP BY ligne_bulletin.rubrique_id");
 
-    $decompte->appendChild($doc->createElement('totalCotisations', '1803203'));
+    $decompte_query->execute();
+    $decompte_array = $decompte_query->fetchAll();
+    $totalCotisation = [];
+    foreach ($decompte_array as $array) {
+        // print_r($array);
+        if ($array["rubrique_id"] == 57 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'RUAMM'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
 
-    // deductions
-    $deductions = $doc->createElement('deductions');
+        if ($array["rubrique_id"] == 58 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'RUAMM'));
+            $cotisation->appendChild($doc->createElement('tranche', 'TRANCHE_2'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+
+        if ($array["rubrique_id"] == 67 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'FIAF'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 56 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'PRESTATIONS_FAMILIALES'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 56 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'CHOMAGE'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 62 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'ATMP'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 68 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'FDS'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 64 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'FORMATION_PROFESSIONNELLE'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 65 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'FSH'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+        if ($array["rubrique_id"] == 66 && $array["base"] != 0) {
+            $cotisation = $doc->createElement('cotisation');
+            $cotisations->appendChild($cotisation);
+            $cotisation->appendChild($doc->createElement('type', 'CCS'));
+            $cotisation->appendChild($doc->createElement('assiette', $array["base"]));
+            $cotisation->appendChild($doc->createElement('valeur', ($array["sum"]) * -1));
+        }
+
+        array_push($totalCotisation, ($array["sum"]) * -1);
+    }
+
+
+    $decompte->appendChild($doc->createElement('totalCotisations', array_sum($totalCotisation)));
+
+
+    // // deductions
+    $deductions = $doc->createElement('deductions', ' ');
     $decompte->appendChild($deductions);
 
-    $deduction1 = $doc->createElement('deduction');
-    $deductions->appendChild($deduction1);
+    if (isset($year)) {
+        $filename = "DN-" . $year . "A01" . "-" . $societeNumeroCafat[0] . $societeNumeroCafat[1]  . ".xml";
+        if ($quarter != "") {
+            switch ($quarter) {
+                case 1:
+                    $filename = "DN-" . $year . "T01" . "-" . $societeNumeroCafat[0] . $societeNumeroCafat[1]  . ".xml";
 
-    $deduction1->appendChild($doc->createElement('type', 'ACOMPTE'));
-    $deduction1->appendChild($doc->createElement('valeur', '3203'));
+                    break;
+                case 2:
+                    $filename = "DN-" . $year . "T02" . "-" . $societeNumeroCafat[0] . $societeNumeroCafat[1]  . ".xml";
+                    break;
+                case 3:
+                    $filename = "DN-" . $year . "T03" . "-" . $societeNumeroCafat[0] . $societeNumeroCafat[1]  . ".xml";
 
-    $deduction2 = $doc->createElement('deduction');
-    $deductions->appendChild($deduction2);
+                    break;
+                case 4:
+                    $filename = "DN-" . $year . "T04" . "-" . $societeNumeroCafat[0] . $societeNumeroCafat[1]  . ".xml";
+                    break;
+                default:
+                    break;
+            }
+        }
 
-    $deduction2->appendChild($doc->createElement('type', 'RBS'));
-    $deduction2->appendChild($doc->createElement('valeur', '100000'));
+        if ($month != "") {
+            $filename = "DN-" . $yearOnly . "M" . $month . "-" . $societeNumeroCafat[0] . $societeNumeroCafat[1]  . ".xml";
+        }
+    }
 
-    $decompte->appendChild($doc->createElement('montantAPayer', '1700000'));
-
-    $filename = "output.xml";
 
     //Headers for download
     header("Content-Type: text/xml");
-    // header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
 
     echo $doc->saveXML();
     exit;
